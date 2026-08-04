@@ -1,20 +1,16 @@
-"""
-In-sample 固定 P 评估 (导师认可 in-sample 口径)。
+"""In-sample grid over the filter level P (sixteen-stock pilot).
 
-目的: 去掉原主表的 per-stock selection (挑 P / 挑 λ / 挑 tSNE-vs-ER / tune 6 只 4D grid),
-      统一超参, 只让 P 固定 (方案1) 或按成本规则 (方案2), 看还能 beat FIDR-SCAN 几只。
+Runs the full (ticker, embedding, method, P) x cost grid on the pilot universe
+with one shared hyper-parameter setting: minPts=30, dlp_k=10, dlp_weight=1.0.
+Embeddings are read from cache/. No train/test split; see
+src/walkforward_eval.py for the out-of-sample protocol and
+src/select_pstar_pilot.py for how P*(c) is read off this grid.
 
-协议:
-  - 全 5850 bar in-sample (不切 train/test), 与原始 <STOCK>_v2.ipynb 口径一致
-  - embedding 用现成 cache: DLP/data/cache/{tag}_tsne.npy + {tag}_ertsne_lam{λ}.npy
-    (已核对: 两 cache 与 csv 均 5850 行, dropna 不掉行 -> 行 i 对齐 csv 行 i)
-  - 统一超参: 全 16 只 minPts=30, dlp_k=10, dlp_weight=1.0 (原 v2 default)
-             tune 6 只不再 4D grid (那也是 selection)
-  - 输出全网格 CSV: (tag, emb, method, P) × cost 的 in-sample return
-    方案1a/1b/2 由 analyze_insample.py 从网格切, 不重复跑
+The thirty-five-stock panel reported in the paper is produced by
+src/grid_universe.py and src/compute_baselines*.py, which use lambda = 1.0 for
+every ticker.
 
-复用 b1_eval.py: run_trading / load_stock / dbscan_markers (verbatim, 见下注明)。
-dbscan_k_v2 用 spec load (与 b1_eval 同法)。
+Output: the full grid as CSV under results/.
 """
 import os
 import sys
@@ -29,7 +25,7 @@ DATA_DIR = 'data'
 CACHE_DIR = 'cache'
 OUT_DIR = 'results'
 
-# 每只 ER-tSNE λ (来自 run_ertsne_all.py; AAPL 2.0 其余 1.0)
+# per-ticker SR-tSNE lambda (pilot only; AAPL 2.0, all others 1.0)
 STOCK_LAMBDA = {
     'AAPL': 2.0, 'AEO': 1.0, 'AMZN': 1.0, 'BAC': 1.0, 'CPRI': 1.0,
     'GES': 1.0, 'GOOG': 1.0, 'GS': 1.0, 'HD': 1.0, 'HSBC': 1.0,
@@ -38,15 +34,15 @@ STOCK_LAMBDA = {
 ALL_STOCKS = ['AAPL', 'AEO', 'AMZN', 'BAC', 'CPRI', 'GES', 'GOOG', 'GS',
               'HD', 'HSBC', 'JCP', 'JPM', 'MSFT', 'TGT', 'TIF', 'WMT']
 
-COST_LEVELS = [0, 0.2, 0.5, 1, 2, 5, 10, 20]  # 加 0.2bp 超低成本档 (现实美股大盘股点差 ~0.2-2bp)
-SWEEP_PCTS = [5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 95]  # 加极小 P (极端尾部信号最纯+交易最少)
+COST_LEVELS = [0, 0.2, 0.5, 1, 2, 5, 10, 20]  # includes 0.2bp; realistic US large-cap spreads are ~0.2-2bp
+SWEEP_PCTS = [5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 95]  # includes very small P: purest tail signal, fewest trades
 
-# 统一超参 (原 v2 default, 全 16 只一致, 不再 per-stock tune)
+# shared hyper-parameters, identical for all sixteen pilot tickers
 DEF_MINPTS = 30
 DEF_DLP_K = 10
 DEF_DLP_W = 1.0
 
-# 加载 dbscan_k_v2 (与 b1_eval 同法)
+# load dbscan_k_v2
 _spec = importlib.util.spec_from_file_location(
     'dbscan_k_v2', os.path.join(os.path.dirname(__file__), 'dbscan_k_v2.py'))
 _v2mod = importlib.util.module_from_spec(_spec)
@@ -55,7 +51,7 @@ dbscan_k_v2 = _v2mod.dbscan_k_v2
 
 
 # ---------------------------------------------------------------------------
-# verbatim from b1_eval.py (down->buy, up->sell, all-in/all-out, 开+平各扣一次)
+# down-marker -> buy, up-marker -> sell, all-in/all-out, cost charged on entry and exit
 # ---------------------------------------------------------------------------
 def run_trading(up_mask, down_mask, prices, cost_bps=0):
     cost_rate = cost_bps / 10000 / 2
@@ -72,7 +68,7 @@ def run_trading(up_mask, down_mask, prices, cost_bps=0):
     return (cash - 10000) / 100, trades
 
 
-# verbatim from b1_eval.py (读 <tag>_n.csv, 不 dropna -> 与 cache 对齐已核对)
+# reads <tag>_n.csv without dropna so row i matches cache row i
 def load_stock(tag):
     df = pd.read_csv(f'{DATA_DIR}/{tag}_n.csv')
     df['labels'] = np.where(df['marketClose'] >= df['marketOpen'], 1, -1)
@@ -84,7 +80,7 @@ def load_stock(tag):
     return X_raw, y, prices
 
 
-# verbatim from b1_eval.py (plain DBSCAN 全噪声点当 marker, 无 P sweep)
+# plain DBSCAN: every noise point is a marker, no P sweep
 def dbscan_markers(Y, minPts=30, eps_pct=25):
     nn = NearestNeighbors(n_neighbors=minPts).fit(Y)
     eps = np.percentile(nn.kneighbors(Y)[0][:, -1], eps_pct)
@@ -92,23 +88,23 @@ def dbscan_markers(Y, minPts=30, eps_pct=25):
 
 
 # ---------------------------------------------------------------------------
-# 单只 in-sample 全网格
+# full in-sample grid for one ticker
 # ---------------------------------------------------------------------------
 def eval_stock(tag, verbose=True):
     lam = STOCK_LAMBDA[tag]
     X_raw, y, prices = load_stock(tag)
-    X_scaled = StandardScaler().fit_transform(X_raw)   # 全段 fit, 给 dbscan_k_v2 的 X_high
+    X_scaled = StandardScaler().fit_transform(X_raw)   # fit on the whole segment; this is X_high for dbscan_k_v2
     is_up, is_down = (y == 1), (y == -1)
     buyhold = (prices[-1] - prices[0]) / prices[0] * 100
 
     Y = {'tSNE': np.load(f'{CACHE_DIR}/{tag}_tsne.npy'),
-         'ER-tSNE': np.load(f'{CACHE_DIR}/{tag}_ertsne_lam{lam}.npy')}
-    assert Y['tSNE'].shape[0] == len(prices), f'{tag} tsne 行数不齐'
-    assert Y['ER-tSNE'].shape[0] == len(prices), f'{tag} er 行数不齐'
+         'SR-tSNE': np.load(f'{CACHE_DIR}/{tag}_srtsne_lam{lam}.npy')}
+    assert Y['tSNE'].shape[0] == len(prices), f'{tag} tsne row count mismatch'
+    assert Y['SR-tSNE'].shape[0] == len(prices), f'{tag} er row count mismatch'
 
     rows = []
     for emb, Yemb in Y.items():
-        # DBSCAN+K_v2: 全 P sweep (统一超参, 不 tune)
+        # DBSCAN+K: sweep over all P with shared hyper-parameters
         for P in SWEEP_PCTS:
             R = dbscan_k_v2(Yemb, X_scaled, k=4, minPts=DEF_MINPTS,
                             outlier_top_pct=P, labels_dir=y,
@@ -119,7 +115,7 @@ def eval_stock(tag, verbose=True):
             for c in COST_LEVELS:
                 row[f'ret_{c}bp'] = round(run_trading(mk & is_up, mk & is_down, prices, c)[0], 3)
             rows.append(row)
-        # plain DBSCAN baseline (成本穿越对手, 无 P)
+        # plain DBSCAN baseline, no P
         mkp = dbscan_markers(Yemb)
         row = {'tag': tag, 'emb': emb, 'method': 'plain', 'P': None,
                'n_markers': int(mkp.sum()), 'buyhold': round(buyhold, 3), 'lambda': lam}
@@ -162,7 +158,7 @@ def _self_test():
     assert ret_c < ret
     ret0, tr0 = run_trading(np.zeros(5, bool), np.zeros(5, bool), prices, 0)
     assert ret0 == 0.0 and tr0 == 0
-    print(f'  [ok] run_trading: 40% / cost减 / 无marker=0')
+    print(f'  [ok] run_trading: 40% / cost applied / no markers -> 0')
     assert len(ALL_STOCKS) == 16 and set(STOCK_LAMBDA) == set(ALL_STOCKS)
     print('=== PASSED ===\n')
 
