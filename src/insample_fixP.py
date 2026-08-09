@@ -1,13 +1,13 @@
 """In-sample grid over the filter level P (sixteen-stock pilot).
 
-Runs the full (ticker, embedding, method, P) x cost grid on the pilot universe
+Runs the full (ticker, embedding, method, P) x cost grid on the pilot stocks
 with one shared hyper-parameter setting: minPts=30, dlp_k=10, dlp_weight=1.0.
 Embeddings are read from cache/. No train/test split; see
 src/walkforward_eval.py for the out-of-sample protocol and
 src/select_pstar_pilot.py for how P*(c) is read off this grid.
 
 The thirty-five-stock panel reported in the paper is produced by
-src/grid_universe.py and src/compute_baselines*.py, which use lambda = 1.0 for
+src/grid_panel.py and src/compute_baselines*.py, which use lambda = 1.0 for
 every ticker.
 
 Output: the full grid as CSV under results/.

@@ -1,9 +1,9 @@
-"""Figure 1 v2: 右图升级 — 选"低买高卖"最干净的股票, 圈出最佳一对买卖 + 真实日期 x 轴。
-用法: python plot_fig1_v2.py scan        # 扫 35 只 @2bp, 打分排序打印
-      python plot_fig1_v2.py fig TAG1 TAG2 ...   # 给指定股票出候选图
-打分: 每笔完成的 买i→卖j 配对, score = (1-买点局部分位) * 卖点局部分位 * 该笔收益%;
-局部分位 = 价格在 [t-W, t+W] 窗口内的百分位 (W=250 bar ≈ 3 个交易日), 买越接近局部最低/卖越接近局部最高越好。
-股票分 = 最佳配对分; 图要干净, 只在 buys<=8 的股票里挑。
+"""Legacy method illustration (not used in the paper).
+Usage: python src/plot_fig1_v2.py scan          # rank all 35 tickers
+       python src/plot_fig1_v2.py fig TAG ...    # draw the named tickers
+Score for a completed buy/sell pair: (1 - local percentile at the buy) x local percentile at the sell x the return of that round trip.
+The local percentile is taken over a window of W = 250 bars, about three sessions.
+A ticker scores as its best pair.
 """
 import sys
 sys.path.insert(0, 'src')
@@ -19,7 +19,7 @@ DATA_EXT = f'{ROOT}/data'; CACHE = 'cache'; OUTDIR = f'{ROOT}/results'
 STOCKS = ['MGM','UAA','BX','TKO','TSN','TPR','RHI','KFY','MCHP','PCTY','BCPC','DTM','HSIC','THO',
           'COO','WAL','ESNT','JLL','USFD','EIX','TALO','MGEE','EXP','CUBE','EME','SWX','AAP','OMC','WFRD','UTHR',
           'EXR','HE','POR','TRUP','PHIN']
-COST = 2; P = 10; W = 250               # 2bp -> P*=10, 交易少图干净
+COST = 2; P = 10; W = 250               # 2bp -> P* = 10
 
 
 def load(tag):
@@ -29,12 +29,12 @@ def load(tag):
     X = StandardScaler().fit_transform(df[cols].values.astype(np.float64))
     prices = df.marketClose.values.astype(float)
     dates = pd.to_datetime(df.Date)
-    Y_er = np.load(f'{CACHE}/{tag}_ertsne_lam1.0.npy')
+    Y_er = np.load(f'{CACHE}/{tag}_srtsne_lam1.0.npy')
     return X, y, prices, dates, Y_er
 
 
 def trades(tag):
-    """跑 marker + all-in/all-out, 返回 (buys, sells, pairs, hold, mk, 其余上下文)"""
+    """Run the detector and the all-in/all-out engine."""
     X, y, prices, dates, Y_er = load(tag)
     is_up, is_down = (y == 1), (y == -1)
     mk = (F.dbscan_k_v2(Y_er, X, k=4, minPts=30, outlier_top_pct=P,
@@ -46,12 +46,12 @@ def trades(tag):
         elif is_up[i] and mk[i] and state == 'P':
             sells.append(i); state = 'C'
         hold[i] = (state == 'P')
-    pairs = list(zip(buys, sells))       # 未平仓的最后一笔买不配对
+    pairs = list(zip(buys, sells))       # an unclosed final buy is not paired
     return X, y, prices, dates, Y_er, mk, is_up, is_down, buys, sells, pairs, hold
 
 
 def pctile(prices, i):
-    """价格 p[i] 在局部窗口内的百分位 (0=窗口最低, 1=窗口最高)"""
+    """Percentile of p[i] inside its local window (0 = lowest, 1 = highest)."""
     w = prices[max(0, i - W): i + W]
     return (w < prices[i]).mean()
 
@@ -80,23 +80,23 @@ def scan():
               f'best_pair profit={bprofit:+6.1f}% buy@p{rows[-1]["buy_pct"]:.02f} '
               f'sell@p{rows[-1]["sell_pct"]:.02f} score={best:6.2f}', flush=True)
     df = pd.DataFrame(rows).sort_values('score', ascending=False)
-    print('\n=== 排序 (buys<=8 图干净优先) ===')
+    print('\n=== ranked, few-trade tickers first ===')
     print(df[df.buys <= 8].head(8).to_string(index=False))
-    print('\n=== 全量 top8 ===')
+    print('\n=== overall top 8 ===')
     print(df.head(8).to_string(index=False))
 
 
 def day_ticks(dates, every=10):
-    """每 every 个交易日一个刻度: 返回 (bar 下标, 'Apr 15' 标签)"""
+    """One tick every `every` sessions; returns (bar index, label)."""
     d = dates.dt.normalize()
-    first = d.ne(d.shift()).to_numpy().nonzero()[0]   # 每个交易日第一根 bar
+    first = d.ne(d.shift()).to_numpy().nonzero()[0]   # first bar of each session
     idx = first[::every]
     return idx, [dates.iloc[i].strftime('%b %d') for i in idx]
 
 
 def fig(tag):
     X, y, prices, dates, Y_er, mk, is_up, is_down, buys, sells, pairs, hold = trades(tag)
-    # 左图上色: 复现内部 DBSCAN 簇/噪声 (同旧版)
+    # left panel: recover the DBSCAN clusters and noise
     nn = NearestNeighbors(n_neighbors=30).fit(Y_er)
     eps = np.percentile(nn.kneighbors(Y_er)[0][:, -1], 25)
     lab = DBSCAN(eps=eps, min_samples=30).fit_predict(Y_er)
@@ -115,11 +115,11 @@ def fig(tag):
                 lw=0.3, label='down-marker $\\to$ buy')
     axL.scatter(Y_er[mk_sell, 0], Y_er[mk_sell, 1], s=26, c='#d73027', edgecolor='k',
                 lw=0.3, label='up-marker $\\to$ sell')
-    axL.set_title(f'{tag}: ER-t-SNE embedding with selected markers ($P^*={P}$)')
-    axL.set_xlabel('ER-t-SNE 1'); axL.set_ylabel('ER-t-SNE 2')
+    axL.set_title(f'{tag}: SR-tSNE embedding with selected markers ($P^*={P}$)')
+    axL.set_xlabel('SR-tSNE 1'); axL.set_ylabel('SR-tSNE 2')
     axL.legend(fontsize=8, frameon=False, loc='best'); axL.tick_params(labelsize=8)
 
-    # 右图: bar 下标等距画 (避免隔夜/周末断口), 刻度标真实日期
+    # right panel: bars are evenly spaced, ticks carry real dates
     x = np.arange(len(prices))
     axR.plot(x, prices, color='#333333', lw=0.9, zorder=2)
     inpos = False; start = 0
@@ -131,12 +131,12 @@ def fig(tag):
                 lw=0.4, zorder=3, label=f'buy ({len(buys)})')
     axR.scatter(sells, prices[sells], marker='v', s=55, c='#d73027', edgecolor='k',
                 lw=0.4, zorder=3, label=f'sell ({len(sells)})')
-    # 最佳一对"低买高卖": 金圈 + 箭头标注
+    # best buy/sell pair, circled and annotated
     if bi >= 0:
         axR.scatter([bi, bj], [prices[bi], prices[bj]], s=340, facecolor='none',
                     edgecolor='#e08214', lw=2.2, zorder=4)
         rng = prices.max() - prices.min()
-        axR.margins(y=0.16)                              # 上下留边距, 标注文字不压轴/不出界
+        axR.margins(y=0.16)                              # leave room so the annotation does not clip
         axR.annotate('buy near local low', (bi, prices[bi]), xytext=(bi, prices[bi] - 0.13 * rng),
                      ha='center', va='top', fontsize=10, color='#1a9850', fontweight='bold',
                      arrowprops=dict(arrowstyle='->', color='#1a9850', lw=1.4), zorder=5)

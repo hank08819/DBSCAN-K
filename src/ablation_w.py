@@ -1,7 +1,7 @@
-"""实验A: dlp_weight 消融 (w=0 纯几何 / 0.5 / 1 论文设置 / 2)。
-35 股 × 4 个 w × 12 个 P × 5 成本档, embedding 用现成 cache, 纯 CPU。
-每个 w 用与论文相同的全局规则各自选 P*(c)=argmax_P mean_over_35(ret_c), 公平对比。
-输出 result/insample_fixP/grid_ablation_w.csv, 汇总表 stdout。"""
+"""DLP-weight ablation (w=0 pure geometry / 0.5 / 1 as in the paper / 2).
+35 tickers x 4 values of w x 12 values of P x 5 cost levels, from cached embeddings, CPU only.
+Each w selects its own P*(c) by the same global rule, so the comparison is fair.
+Writes results/grid_ablation_w.csv; summary table on stdout."""
 import sys, time
 sys.path.insert(0, 'src')
 import numpy as np, pandas as pd
@@ -33,8 +33,8 @@ for i, tag in enumerate(STOCKS):
     X, y, pr = load(tag)
     up, dn = (y == 1), (y == -1)
     bh = (pr[-1] - pr[0]) / pr[0] * 100
-    Yemb = np.load(f'{CACHE}/{tag}_ertsne_lam1.0.npy')
-    assert Yemb.shape[0] == len(pr), f'{tag} 行数不齐'
+    Yemb = np.load(f'{CACHE}/{tag}_srtsne_lam1.0.npy')
+    assert Yemb.shape[0] == len(pr), f'{tag} row count mismatch'
     for w in WEIGHTS:
         for P in PS:
             R = F.dbscan_k_v2(Yemb, X, k=4, minPts=30, outlier_top_pct=P,
@@ -50,7 +50,7 @@ df = pd.DataFrame(rows)
 df.to_csv(f'{OUT}/grid_ablation_w.csv', index=False)
 print(f'[saved] {OUT}/grid_ablation_w.csv ({len(df)} rows)')
 
-# 汇总: 每个 w 各自按全局规则选 P*(c), 报 mean ret 与 wins vs B&H
+# summary: each w picks its own P*(c); report mean return and wins vs buy-and-hold
 def bhc(bh, c): return ((1 - c / 20000) * (bh / 100 + 1) - 1) * 100
 print(f'\n{"w":>4} {"cost":>5} {"P*":>4} {"mean_ret":>9} {"wins_vs_BH":>11}')
 for w in WEIGHTS:

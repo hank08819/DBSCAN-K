@@ -1,5 +1,5 @@
-"""方法 x 成本档 均值表: 7 方法在 0/0.2/0.5/1/2bp 的 35 只均值净收益 + wins(vs B&H)。
-ours/Random 每档按全局 P* 规则重算 marker; baseline 信号与成本无关, 只是成本罚不同; B&H 成本无关。"""
+"""Method x cost table: mean net return over 35 tickers at 0/0.2/0.5/1/2bp, plus wins vs B&H.
+Ours and random recompute markers at each cost via the global P* rule; the classical signals do not depend on cost, only the charge does."""
 import sys
 sys.path.insert(0, 'src')
 import numpy as np, pandas as pd
@@ -34,7 +34,7 @@ for ti, t in enumerate(STOCKS):
             if v[m] > bh_ret: win[m][c] += 1
 
 print('=' * 62)
-print('方法 x 成本档: 35 只均值净收益 %')
+print('Method x cost: mean net return (%) over 35 tickers')
 print(f'{"method":12}' + ''.join(f'{str(c)+"bp":>9}' for c in COSTS))
 for m in METHODS:
     print(f'{m:12}' + ''.join(f'{np.mean(ret[m][c]):>9.1f}' for c in COSTS))

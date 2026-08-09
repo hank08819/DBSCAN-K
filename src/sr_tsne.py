@@ -133,7 +133,7 @@ def compute_O_DLP(nn_high_indices, Y_low, k=10):
 
 def compute_DLP(nn_high_indices, Y_low, k=10):
     """
-    DLP (Han et al. 2025): set-based k-NN overlap ratio.
+    DLP, as defined in the original FIDR-SCAN line of work: set-based k-NN overlap ratio.
 
     For each point i:  |F_x(i) ∩ F_y(i)| / k
     where F_x(i), F_y(i) are the sets of the k nearest neighbors in

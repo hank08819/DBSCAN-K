@@ -40,7 +40,7 @@ def load_window(tag, win):
     X = StandardScaler().fit_transform(df[cols].values.astype(np.float64)[mask])
     y = np.where(df.marketClose >= df.marketOpen, 1, -1)[mask]
     pr = df.marketClose.values.astype(float)[mask]
-    Yer = np.load(f'{CACHE}/{tag}_wf{win}_ertsne_lam1.0.npy')
+    Yer = np.load(f'{CACHE}/{tag}_wf{win}_srtsne_lam1.0.npy')
     Yts = np.load(f'{CACHE}/{tag}_wf{win}_tsne.npy')
     assert Yer.shape[0] == len(pr) == Yts.shape[0], f'{tag} {win} row mismatch'
     return X, y, pr, Yer, Yts

@@ -21,7 +21,7 @@ def load(t):
     dd = pd.read_csv(f'{DATA_EXT}/{t}_n.csv'); yy = np.where(dd.marketClose >= dd.marketOpen, 1, -1)
     cols = [c for c in dd.columns if c != 'Date']
     X = StandardScaler().fit_transform(dd[cols].values.astype(np.float64))
-    return X, yy, dd.marketClose.values.astype(float), np.load(f'{CACHE}/{t}_tsne.npy'), np.load(f'{CACHE}/{t}_ertsne_lam1.0.npy')
+    return X, yy, dd.marketClose.values.astype(float), np.load(f'{CACHE}/{t}_tsne.npy'), np.load(f'{CACHE}/{t}_srtsne_lam1.0.npy')
 
 
 def equity(up_mask, down_mask, prices, c):

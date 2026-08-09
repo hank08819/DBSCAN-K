@@ -13,8 +13,8 @@ cost-to-filter rule shared by all stocks.
 ## Layout
 
 ```
-data/      35 equities (S&P Composite 1500), 5-min bars, ~60 trading days (2026), one CSV per ticker
-cache/     precomputed 2-D embeddings per ticker (SR-tSNE lambda=1.0; legacy file prefix `ertsne`, and t-SNE for the original detector).
+data/      35 U.S. equities, 5-min bars, ~60 trading days (2026), one CSV per ticker
+cache/     precomputed 2-D embeddings per ticker (SR-tSNE lambda=1.0; legacy file prefix `srtsne`, and t-SNE for the original detector).
            The walk-forward windows are NOT shipped; run src/embed_walkforward.py to build them.
 results/   result CSVs shipped for table/figure reproduction; scripts also write here
 src/       all code (see below)
@@ -54,7 +54,7 @@ against buy-and-hold at every cost level.
 **Full recomputation from data + cached embeddings** (CPU, ~10–25 min each):
 
 ```
-python src/grid_universe.py 0 1    # trading grid over all P and cost levels -> results/grid_part0.csv
+python src/grid_panel.py 0 1    # trading grid over all P and cost levels -> results/grid_part0.csv
 python src/ablation_w.py           # DLP-weight ablation grid -> results/grid_ablation_w.csv
 python src/compute_baselines_perstock.py   # timing baselines per stock -> results/baselines_perstock35.csv
 python src/compute_risk_multi.py   # Table 4 at all three cost levels (0/0.5/2 bp) -> results/risk_multi.csv
@@ -96,7 +96,7 @@ python src/plot_fig1_v2.py         # legacy method illustration (not in the pape
 **Recompute embeddings from scratch** (optional, GPU, ~45 s per stock):
 
 ```
-python src/embed_new_stocks.py     # t-SNE + SR-tSNE for every CSV in data/ -> cache/
+python src/embed_stocks.py     # t-SNE + SR-tSNE for every CSV in data/ -> cache/
 ```
 
 > **Reproduce from the shipped `cache/`, not by recomputing.** t-SNE is
@@ -108,11 +108,11 @@ python src/embed_new_stocks.py     # t-SNE + SR-tSNE for every CSV in data/ -> c
 
 | File | Role |
 |---|---|
-| `src/er_tsne.py` | SR-tSNE: t-SNE with a differentiable rank-preservation (DLP) regularizer (legacy module name `er_tsne`) |
+| `src/sr_tsne.py` | SR-tSNE: t-SNE with a differentiable rank-preservation (DLP) regularizer (legacy module name `sr_tsne`) |
 | `src/dbscan_k_v2.py` | DBSCAN+K detector: adaptive eps, noise scoring (isolation + DLP), top-*P*% filter |
 | `src/insample_fixP.py` | trading simulator (`run_trading`), original detector, shared helpers |
 | `src/compute_baselines*.py` | buy-and-hold and classical timing baselines (MA, RSI, momentum, random) |
-| `src/grid_universe.py`, `src/ablation_w.py` | result grids over *P*, cost, and DLP weight |
+| `src/grid_panel.py`, `src/ablation_w.py` | result grids over *P*, cost, and DLP weight |
 | `src/select_pstar_pilot.py` | P*(c) schedule selection on the 2019 pilot grid (`results/pilot_grid16.csv`) |
 | `src/embed_walkforward.py`, `src/walkforward_eval.py` | out-of-sample 40/20 walk-forward (Sec. 5) |
 | `src/cluster_ablation.py` | candidate-generator ablation (Table 8) |

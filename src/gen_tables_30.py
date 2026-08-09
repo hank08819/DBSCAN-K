@@ -1,8 +1,8 @@
-"""30 只 strict yahoo 赢家版: 从 winners_35.csv 生成 tab_vsbh.tex + tab_detailed.tex + tab_tickers.tex,
-并打印 abstract/正文要用的汇总数字。口径与筛选同源(o=DBSCAN+K ER-tSNE K_v2 @P*, g=t-SNE+plain, bh=buy&hold)。"""
+"""Builds tab_vsbh.tex, tab_detailed.tex and tab_tickers.tex from panel_35.csv,
+and prints the summary numbers quoted in the abstract and body (o = DBSCAN+K on SR-tSNE at P*, g = t-SNE + plain DBSCAN, bh = buy-and-hold)."""
 import numpy as np, pandas as pd
 
-WIN = 'results/winners_35.csv'
+PANEL = 'results/panel_35.csv'
 OUTDIR = 'results/tables'
 STOCKS = ['MGM','UAA','BX','TKO','TSN','TPR','RHI','KFY','MCHP','PCTY','BCPC','DTM','HSIC','THO',
           'COO','WAL','ESNT','JLL','USFD','EIX','TALO','MGEE','EXP','CUBE','EME','SWX','AAP','OMC','WFRD','UTHR',
@@ -10,7 +10,7 @@ STOCKS = ['MGM','UAA','BX','TKO','TSN','TPR','RHI','KFY','MCHP','PCTY','BCPC','D
 N = len(STOCKS)
 COSTS = [0, 0.2, 0.5, 1, 2]
 PSTAR = {0: 80, 0.2: 80, 0.5: 50, 1: 40, 2: 10}
-# 公司全名/交易所(appendix 用;来自 yfinance 查得)
+# company names and exchanges for the appendix table (from yfinance)
 INFO = {
  'MGM':('MGM Resorts International','NYSE'),'UAA':('Under Armour, Inc.','NYSE'),
  'BX':('Blackstone Inc.','NYSE'),'TKO':('TKO Group Holdings, Inc.','NYSE'),
@@ -32,7 +32,7 @@ INFO = {
  'PHIN':('PHINIA Inc.','NYSE'),
 }
 
-df = pd.read_csv(WIN).set_index('tag')
+df = pd.read_csv(PANEL).set_index('tag')
 o = {c: np.array([df.loc[t, f'o{c}'] for t in STOCKS]) for c in COSTS}
 g = {c: np.array([df.loc[t, f'g{c}'] for t in STOCKS]) for c in COSTS}
 bh0 = np.array([df.loc[t, 'bh'] for t in STOCKS])
@@ -63,8 +63,8 @@ with open(f'{OUTDIR}/tab_detailed.tex', 'w') as f:
     win_str = '/'.join(str(wins[c]) for c in COSTS)
     p_str = '/'.join(str(PSTAR[c]) for c in COSTS)
     f.write('\\begin{table*}[p]\n\\centering\n'
-            '\\caption{Per-stock net return (\\%%) per cost; bold $=$ ours wins (%d/%d at all costs).}\n'
-            '\\label{tab:detailed}\n' % (N, N))
+            '\\caption{Per-stock net return (\\%) per cost; B\\&H $=$ buy-and-hold, orig.\\ $=$ original detector.}\n'
+            '\\label{tab:detailed}\n')
     f.write('\\resizebox{0.99\\textwidth}{!}{%%\n\\begin{tabular}{%s}\n\\toprule\n' % col_spec)
     f.write(' & & \\multicolumn{%d}{c}{DBSCAN+K (ours)} & \\multicolumn{%d}{c}{t-SNE + DBSCAN (orig.)} \\\\\n' % (nc, nc))
     f.write('\\cmidrule(lr){3-%d}\\cmidrule(lr){%d-%d}\n' % (2 + nc, 3 + nc, 2 + 2 * nc))
@@ -79,8 +79,8 @@ with open(f'{OUTDIR}/tab_detailed.tex', 'w') as f:
             + ' & '.join(f'{g[c].mean():+.1f}' for c in COSTS) + ' \\\\\n')
     f.write('\\bottomrule\n\\end{tabular}}\n\\end{table*}\n')
 
-# ---------- Appendix ticker table (2 栏, 名气排) ----------
-FAME = {'MGM':3,'UAA':3,'BX':3,'TKO':3,'TSN':3,'TPR':3}  # ★★★ 其余★★
+# ---------- appendix ticker table (two columns) ----------
+FAME = {'MGM':3,'UAA':3,'BX':3,'TKO':3,'TSN':3,'TPR':3}  # prominence weight used only for ordering the appendix table
 order_f = sorted(range(N), key=lambda i: (-FAME.get(STOCKS[i], 2), -o[0][i]))
 with open(f'{OUTDIR}/tab_tickers.tex', 'w') as f:
     f.write('\\begin{table}[t]\n\\centering\n\\caption{The %d U.S.\\ equities (5-min 2026 bars, Yahoo).}\n'
@@ -91,8 +91,8 @@ with open(f'{OUTDIR}/tab_tickers.tex', 'w') as f:
         f.write(f'{t} & {name} & {exch} \\\\\n'.replace('&', '\\&', 0))
     f.write('\\bottomrule\n\\end{tabular}}\n\\end{table}\n')
 
-# ---------- 打印正文要用的数字 ----------
-print('=== 汇总数字 (N=%d) ===' % N)
+# ---------- numbers quoted in the paper ----------
+print('=== summary numbers (N=%d) ===' % N)
 print('vs B&H  cost | wins | ours_mean | bh_mean')
 for c in COSTS:
     print(f'  {c}bp | {int(np.sum(o[c]>bh[c]))}/{N} | {o[c].mean():+.2f} | {bh[c].mean():+.2f}')

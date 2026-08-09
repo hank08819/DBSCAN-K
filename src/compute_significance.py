@@ -6,7 +6,7 @@ strongest classical baseline) with a two-sided paired Wilcoxon signed-rank
 test; a paired t-test is included for reference.
 
 Data sources (same as the paper tables):
-  ours / orig  -> results/winners_35.csv   (columns o{c} / g{c})
+  ours / orig  -> results/panel_35.csv   (columns o{c} / g{c})
   B&H / RSI    -> results/baselines_perstock35.csv
 Run from the repo root:  python src/compute_significance.py
 Output: results/significance_tests.csv + a summary on stdout.
@@ -16,17 +16,17 @@ from scipy import stats
 
 COSTS = [0.0, 0.2, 0.5, 1.0, 2.0]
 
-win = pd.read_csv('results/winners_35.csv').set_index('tag')
-STOCKS = list(win.index)
+panel = pd.read_csv('results/panel_35.csv').set_index('tag')
+STOCKS = list(panel.index)
 per = pd.read_csv('results/baselines_perstock35.csv')
 per = per[per.ticker.isin(STOCKS)]
 
 def series(method, c):
     """Per-stock return vector aligned to the STOCKS order."""
     if method == 'ours':
-        return win[f'o{c:g}'].values
+        return panel[f'o{c:g}'].values
     if method == 'orig':
-        return win[f'g{c:g}'].values
+        return panel[f'g{c:g}'].values
     sub = per[(per.method == method) & (per.cost_bp == c)].set_index('ticker')
     return sub.loc[STOCKS, 'ret'].values
 

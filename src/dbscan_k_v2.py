@@ -1,15 +1,15 @@
 """
-DBSCAN+K v2: 利用 ER-tSNE 邻居结构增强异常点评分。
+DBSCAN+K: scores DBSCAN noise points using SR-tSNE neighbor structure.
 
-与 v1 的区别：
-  v1 score = dist_to_cluster / cluster_density（纯几何）
-  v2 score = (dist_to_cluster / cluster_density) × (1 - 局部DLP)
+Difference from the purely geometric version:
+  geometric only : score = dist_to_cluster / cluster_density
+  with DLP       : score = normalized geometry + w * (1 - local DLP)
 
-局部 DLP：每个噪声点在 embedding 里的 k 近邻排名与高维 k 近邻排名的 Spearman 相关。
-  - DLP 高（邻居保持好）→ 这个点在正常区域，不是真异常 → score 低 → 过滤掉
-  - DLP 低（邻居被打乱）→ 这个点的邻居结构异常 → score 高 → 保留为 marker
+Local DLP: Spearman correlation between a noise point's k-neighbor ranks in the
+  high DLP: neighborhood order survived the projection -> projection artifact -> low score -> dropped
+  low DLP : neighborhood order was destroyed -> genuine anomaly -> high score -> kept as a marker
 
-这样 DBSCAN+K 才真正利用了 ER-tSNE 的邻居信息，DBSCAN 做不到这一点。
+embedding and in feature space. Plain DBSCAN cannot use this information.
 """
 
 import numpy as np
@@ -21,19 +21,19 @@ from scipy.stats import spearmanr
 
 def _compute_local_dlp(Y_emb, X_high, noise_indices, k=10):
     """
-    计算每个噪声点的局部 DLP（邻居保持度）。
+    Local DLP for every noise point.
 
-    对每个噪声点：
-      1. 在高维 X_high 找 k 近邻
-      2. 这 k 个邻居在 Y_emb 里的距离排名
-      3. Spearman 相关 = 局部 DLP
+    For each noise point:
+      1. find its k nearest neighbors in X_high
+      2. rank those k neighbors by distance in Y_emb
+      3. the Spearman correlation of the two rank lists is the local DLP
 
     Returns: ndarray (len(noise_indices),), range [-1, 1]
     """
-    # 高维 kNN（只对噪声点查询）
+    # feature-space kNN, queried only for the noise points
     nn_high = NearestNeighbors(n_neighbors=k + 1, n_jobs=-1).fit(X_high)
     dists_h, idx_h = nn_high.kneighbors(X_high[noise_indices])
-    # 去掉自己
+    # drop the point itself
     idx_h = idx_h[:, 1:]  # (n_noise, k)
 
     r_high = np.arange(1, k + 1)
@@ -42,7 +42,7 @@ def _compute_local_dlp(Y_emb, X_high, noise_indices, k=10):
     for i in range(len(noise_indices)):
         nb_idx = idx_h[i]
         pt = noise_indices[i]
-        # 这些邻居在 embedding 里的距离
+        # distances to those neighbors in the embedding
         dists_low = np.sqrt(((Y_emb[pt] - Y_emb[nb_idx]) ** 2).sum(axis=1))
         r_low = np.argsort(np.argsort(dists_low)) + 1
         corr, _ = spearmanr(r_high, r_low)
@@ -54,22 +54,22 @@ def _compute_local_dlp(Y_emb, X_high, noise_indices, k=10):
 def dbscan_k_v2(Y_emb, X_high, k, minPts=30, outlier_top_pct=30,
                 labels_dir=None, dlp_k=10, dlp_weight=1.0):
     """
-    DBSCAN+K v2: 结合几何异常度 + 邻居结构异常度。
+    DBSCAN+K: geometric isolation combined with neighbor-order distortion.
 
     Parameters
     ----------
-    Y_emb          : ndarray (N, 2) — 2D embedding (t-SNE 或 ER-tSNE)
-    X_high         : ndarray (N, d) — 原始高维数据
-    k              : int — Trading Marker 的标签值
+    Y_emb          : ndarray (N, 2) — 2-D embedding (t-SNE or SR-tSNE)
+    X_high         : ndarray (N, d) — feature-space data
+    k              : int — label value used for retained markers
     minPts         : int — DBSCAN min_samples
-    outlier_top_pct: float — 保留 top P% 噪声点
-    labels_dir     : ndarray (N,) or None — 方向标签 (1/-1)
-    dlp_k          : int — 局部 DLP 的近邻数
-    dlp_weight     : float — DLP 权重，0=退化为 v1，1=等权
+    outlier_top_pct: float — keep the top P% of noise points
+    labels_dir     : ndarray (N,) or None — direction labels (+1 / -1)
+    dlp_k          : int — number of neighbors used for the local DLP
+    dlp_weight     : float — DLP weight; 0 gives a purely geometric detector, 1 weights both equally
 
     Returns
     -------
-    R : ndarray (N,) — 聚类标签
+    R : ndarray (N,) — cluster labels
     """
     N = Y_emb.shape[0]
     rng = np.random.default_rng(42)
@@ -163,46 +163,46 @@ def dbscan_k_v2(Y_emb, X_high, k, minPts=30, outlier_top_pct=30,
             R[i] = k
         else:
             lbl = labels_updated[i]
-            # FIX (cluster-label collision): 簇标签编到负数空间, 绝不与 marker 值 k 冲突。
-            # 原 (lbl+1): 当簇数 >= k 时, 第 k 个簇 (lbl=k-1) -> R=k, 整簇被误当 marker。
-            # 实测金融 2D embedding 簇数达 20-46, 普遍触发, 每窗污染数十个正常点。
-            # 改 -(lbl+1): 簇点 -> {-1,-2,...}, (R==k) 只剩 O_true_indices 真 marker。
-            # marker 选择逻辑 (geo+DLP+方向 Top-P%) 完全不变, 不会退化成 plain DBSCAN。
+            # Cluster labels are mapped to negative integers so they can never
+            # collide with the marker value k. With the old (lbl+1) encoding the
+            # k-th cluster mapped onto R=k and was read as a marker; these panels
+            # have 20-46 clusters, so this fired often. Marker selection itself
+            # (geometry + DLP + directional top-P%) is unchanged.
             R[i] = -(lbl + 1) if lbl >= 0 else k
     return R
 
 
 # ---------------------------------------------------------------------------
-# Self-test: marker 标签绝不能与 cluster 标签冲突 (回归防护)
+# Self-test: marker labels must never collide with cluster labels.
 # ---------------------------------------------------------------------------
 def _self_test():
     print('=== dbscan_k_v2 SELF-TEST ===')
     rng = np.random.default_rng(0)
-    # 6 个清晰分离的簇 (lbl 0..5, 必含曾撞 k=4 的 lbl=3) + 均匀噪声散点
+    # six well-separated clusters plus uniform noise
     centers = [(0, 0), (20, 0), (0, 20), (20, 20), (40, 0), (0, 40)]
     blobs = [rng.normal([cx, cy], 0.3, size=(50, 2)) for cx, cy in centers]
     noise = rng.uniform(-8, 48, size=(40, 2))
     Y = np.vstack(blobs + [noise])
-    X = Y + rng.normal(0, 0.05, Y.shape)        # 高维占位 (local DLP 用)
+    X = Y + rng.normal(0, 0.05, Y.shape)        # stand-in feature-space data for the local DLP
 
     R = dbscan_k_v2(Y, X, k=4, minPts=10, outlier_top_pct=50,
                     labels_dir=None, dlp_k=10, dlp_weight=1.0)
 
-    # 复现内部 DBSCAN 拿真实簇标签
+    # rerun DBSCAN to recover the true cluster labels
     nn = NearestNeighbors(n_neighbors=10).fit(Y)
     eps = np.percentile(nn.kneighbors(Y)[0][:, -1], 25)
     lab = DBSCAN(eps=eps, min_samples=10).fit_predict(Y)
     nclust = len(set(lab[lab >= 0]))
     marker = (R == 4)
 
-    assert nclust >= 4, f'测试需 >=4 簇覆盖冲突情形, 实得 {nclust}'
+    assert nclust >= 4, f'need >=4 clusters to cover the collision case, got {nclust}'
     contaminated = int((marker & (lab >= 0)).sum())
-    assert contaminated == 0, f'marker 含 {contaminated} 个簇内点 (污染未修复!)'
-    assert marker.sum() > 0, 'marker 不应为空'
-    assert bool((marker <= (lab == -1)).all()), 'marker 必须全来自 DBSCAN 噪声点'
-    print(f'  [ok] 簇数={nclust} (>3, 覆盖原 bug 情形)')
-    print(f'  [ok] marker={int(marker.sum())} 个, 全来自噪声, 0 簇内污染')
-    print(f'  [ok] 噪声点共 {int((lab == -1).sum())}, marker 是其 Top-P% 子集 (未退化成全噪声)')
+    assert contaminated == 0, f'{contaminated} clustered points leaked into the markers'
+    assert marker.sum() > 0, 'marker set must not be empty'
+    assert bool((marker <= (lab == -1)).all()), 'every marker must come from the DBSCAN noise set'
+    print(f'  [ok] {nclust} clusters, covers the collision case')
+    print(f'  [ok] {int(marker.sum())} markers, all from noise, no clustered points')
+    print(f'  [ok] {int((lab == -1).sum())} noise points; markers are the top-P% subset')
     print('=== PASSED ===')
 
 

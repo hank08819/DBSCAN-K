@@ -5,7 +5,7 @@ each window is embedded on its own (t-SNE + SR-tSNE, lambda=1.0). t-SNE is
 transductive, so slicing a full-window embedding in time would let test-period
 bars take part in the embedding. StandardScaler is also fit within each window.
 
-Writes cache/{tag}_wf{train,test}_{tsne,ertsne_lam1.0}.npy.
+Writes cache/{tag}_wf{train,test}_{tsne,srtsne_lam1.0}.npy.
 Run from the repository root:  python src/embed_walkforward.py
 """
 import sys, time, os
@@ -18,7 +18,7 @@ from sklearn.manifold._t_sne import _joint_probabilities
 from sklearn.metrics import pairwise_distances
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
-from er_tsne import run_er_tsne
+from sr_tsne import run_sr_tsne
 
 DATA = 'data'
 CACHE = 'cache'
@@ -39,9 +39,9 @@ def embed_window(X, tag, win):
     Pcoo = coo_matrix(Pd); del Pd, Dsq
     nidx = NearestNeighbors(n_neighbors=K_LOSS + 1, n_jobs=-1).fit(X).kneighbors(
         return_distance=False)[:, 1:K_LOSS + 1]
-    Yer = run_er_tsne(Ytsne, Pcoo.row.astype(np.int64), Pcoo.col.astype(np.int64),
+    Yer = run_sr_tsne(Ytsne, Pcoo.row.astype(np.int64), Pcoo.col.astype(np.int64),
                       Pcoo.data.astype(np.float64), nidx, lambda_dlp=LAM, n_iter=1000)
-    np.save(f'{CACHE}/{tag}_wf{win}_ertsne_lam{LAM}.npy', Yer)
+    np.save(f'{CACHE}/{tag}_wf{win}_srtsne_lam{LAM}.npy', Yer)
     return n
 
 
@@ -51,7 +51,7 @@ if __name__ == '__main__':
     for i, tag in enumerate(todo):
         done = all(os.path.exists(f'{CACHE}/{tag}_wf{w}_{s}.npy')
                    for w in ('train', 'test')
-                   for s in ('tsne', f'ertsne_lam{LAM}'))
+                   for s in ('tsne', f'srtsne_lam{LAM}'))
         if done:
             print(f'[{i+1}/{len(todo)}] {tag}: cached, skip', flush=True); continue
         t0 = time.time()

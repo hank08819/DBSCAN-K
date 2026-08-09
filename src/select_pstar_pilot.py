@@ -20,7 +20,7 @@ STOCKS = ['AAPL', 'AEO', 'AMZN', 'BAC', 'CPRI', 'GES', 'GOOG', 'GS',
           'HD', 'HSBC', 'JCP', 'JPM', 'MSFT', 'TGT', 'TIF', 'WMT']
 COSTS = [0, 0.2, 0.5, 1, 2]
 PS = [5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 95]
-EMB = 'ER-tSNE'
+EMB = 'SR-tSNE'
 PAPER = {0: 80, 0.2: 80, 0.5: 50, 1: 40, 2: 10}
 
 # pre-index: (ticker, P) -> grid row for the K_v2 detector on the SR-tSNE embedding

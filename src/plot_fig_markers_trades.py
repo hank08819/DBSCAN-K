@@ -1,9 +1,9 @@
-"""Fig 2 论文定稿版: markers-on-embedding -> executed-trades 双面板 (AAP @2bp, P*=10).
-计算逻辑全部复用 plot_fig1_v2.py (trades/score_pair/day_ticks), 只重做排版:
-- 去 suptitle 和面板标题 (数字进 caption), panel tag 粗体 a/b
-- 轴标 ER-t-SNE -> SR-tSNE (与论文术语一致)
-- 右图去顶右框+浅网格; 保留金圈最佳买卖对 + "buy near local low"/"sell near local high" 标注
-- dpi 600, 输出 build30 + template
+"""Two panels for AAP at 2bp with P* = 10: markers on the embedding, then the executed trades.
+Computation is shared with plot_fig1_v2.py; only the layout differs.
+- no suptitle or panel titles; the numbers live in the caption
+- axis labelled SR-tSNE, matching the paper
+- right panel keeps the circled best buy/sell pair and its annotations
+- 600 dpi output
 """
 import sys
 import os
@@ -38,7 +38,7 @@ fig_, (axL, axR) = plt.subplots(1, 2, figsize=(9.5, 3.6),
                                              'left': 0.055, 'right': 0.995,
                                              'top': 0.965, 'bottom': 0.13, 'wspace': 0.18})
 
-# (a) embedding: 保留全框 (map 类面板), 框色调淡
+# (a) embedding panel, full frame
 axL.scatter(Y_er[clustered, 0], Y_er[clustered, 1], s=4, c='#cfcfcf', lw=0,
             rasterized=True, label='clustered (normal)')
 axL.scatter(Y_er[noise, 0], Y_er[noise, 1], s=6, c='#8a8a8a', lw=0,
@@ -56,7 +56,7 @@ for sp in axL.spines.values():
 axL.text(0.02, 0.985, 'a', transform=axL.transAxes, ha='left', va='top',
          fontsize=11, fontweight='bold', color=C_INK)
 
-# (b) price path: 顶刊风格 (去顶右框 + 浅网格)
+# (b) price path, light grid
 axR.spines['top'].set_visible(False); axR.spines['right'].set_visible(False)
 axR.spines['left'].set_color('#999999'); axR.spines['bottom'].set_color('#999999')
 axR.grid(axis='y', color='#ededed', lw=0.6, zorder=0); axR.set_axisbelow(True)

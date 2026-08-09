@@ -1,6 +1,6 @@
-"""从 grid_ablation_w.csv 生成 tab_ablation.tex (DLP 权重 w 消融, 全成本档版, 替换 7/11 的 0.5bp 固定版)。
-口径: 所有 w 沿用论文冻结 P*={0:80,0.2:80,0.5:50,1:40,2:10}, 与主表 tab_vsbh 同源 (w=1 行逐股复现主表)。
-单元格 = mean net return% (wins vs B&H)。"""
+"""Builds tab_ablation.tex from grid_ablation_w.csv: DLP-weight ablation across all cost levels.
+All values of w use the frozen schedule P* = {0:80, 0.2:80, 0.5:50, 1:40, 2:10}; the w=1 row reproduces the main table.
+Each cell is mean net return (%) with wins vs B&H in parentheses."""
 import numpy as np, pandas as pd
 
 GRID = 'results/grid_ablation_w.csv'
@@ -35,7 +35,7 @@ with open(OUT, 'w') as f:
     f.write('\\bottomrule\n\\end{tabular}}\n\\end{table}\n')
 print('[saved]', OUT)
 
-# 正文引用数字
+# numbers quoted in the paper
 d1 = df[df.w == 1.0]; d0 = df[df.w == 0.0]
 for c in COSTS:
     s1 = d1[d1.P == PSTAR[c]][f'ret_{c}bp'].mean()

@@ -1,6 +1,6 @@
-"""逐股票 baseline 数据补全: 35 只 x 7 方法 x 5 成本档 的净收益/Sharpe/MaxDD 存 CSV。
-逻辑与随机种子完全复用 compute_baselines_bps.py (seed=1000*ti+100*int(c*10)+s), 均值应与现 tab_baseline 一致。
-输出: result/baselines_perstock35.csv (long format: ticker, cost_bp, method, ret, sharpe, maxdd)"""
+"""Per-ticker baselines: net return, Sharpe and MaxDD for 35 tickers x 7 methods x 5 cost levels.
+Same logic and seeds as compute_baselines_bps.py, so the means reproduce tab_baseline.
+Output: results/baselines_perstock35.csv (long format: ticker, cost_bp, method, ret, sharpe, maxdd)"""
 import sys
 sys.path.insert(0, 'src')
 import numpy as np, pandas as pd
@@ -18,7 +18,7 @@ for ti, t in enumerate(STOCKS):
     mg = F.dbscan_markers(Yt)
     dma, uma = sig_ma(prices); drsi, ursi = sig_rsi(prices); dmo, umo = sig_mom(prices)
     for c in COSTS:
-        # ours 每档按全局 P* 重算 marker; baseline 信号与成本无关只罚成本; B&H 只在建仓收一次成本(与 bps 版一致取 bh_eq 免成本)
+        # ours recomputes markers per cost; classical signals are cost-independent; B&H pays one entry cost
         mo = (F.dbscan_k_v2(Ye, X, k=4, minPts=30, outlier_top_pct=PSTAR[c], labels_dir=y, dlp_k=10, dlp_weight=1.0) == 4)
         eqs = {'B&H': bh_eq(prices),
                'MA(5/20)': equity(uma, dma, prices, c),
@@ -29,7 +29,7 @@ for ti, t in enumerate(STOCKS):
         for m, eqv in eqs.items():
             r = risk(eqv)
             recs.append({'ticker': t, 'cost_bp': c, 'method': m, 'ret': r[0], 'sharpe': r[1], 'maxdd': r[2]})
-        # Random: 匹配 ours 该档买/卖信号数, 20 seeds 取均值 (seed 方案同 bps 版)
+        # random control: matches our buy/sell counts at that cost, averaged over 20 seeds
         nb, ns = int((mo & dn).sum()), int((mo & up).sum())
         rr = []
         for s in range(20):
@@ -44,9 +44,9 @@ df = pd.DataFrame(recs)
 df.to_csv(OUT, index=False)
 print(f'\nsaved {len(df)} rows -> {OUT}')
 
-# 对账: 打印方法 x 成本档均值, 应与现 tab_baseline.tex 数字一致
+# cross-check: these means should match tab_baseline.tex
 piv = df.pivot_table(index='method', columns='cost_bp', values='ret').reindex(METHODS)
-print('\n均值对账 (vs tab_baseline):')
+print('\ncross-check against tab_baseline:')
 print(piv.round(1).to_string())
 # wins vs B&H
 bh = df[df.method == 'B&H'].set_index(['ticker', 'cost_bp']).ret

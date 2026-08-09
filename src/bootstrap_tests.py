@@ -36,7 +36,7 @@ for tag in STOCKS:
     X=StandardScaler().fit_transform(df[cols].values.astype(np.float64))
     y=np.where(df.marketClose>=df.marketOpen,1,-1); pr=df.marketClose.values.astype(float)
     up,dn=(y==1),(y==-1)
-    Yer=np.load(f'cache/{tag}_ertsne_lam1.0.npy'); Yts=np.load(f'cache/{tag}_tsne.npy')
+    Yer=np.load(f'cache/{tag}_srtsne_lam1.0.npy'); Yts=np.load(f'cache/{tag}_tsne.npy')
     mo=F.dbscan_markers(Yts)
     L[tag]={'up':up,'dn':dn,'pr':pr,'Yer':Yer,'X':X,'y':y,'mo':mo}
 print('loaded',len(L),'stocks',flush=True)

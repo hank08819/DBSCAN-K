@@ -24,7 +24,7 @@ for tag in STOCKS:
     df=pd.read_csv(f'data/{tag}_n.csv')
     cols=[c for c in df.columns if c!='Date']
     X=StandardScaler().fit_transform(df[cols].values.astype(np.float64))
-    Y=np.load(f'cache/{tag}_ertsne_lam1.0.npy')
+    Y=np.load(f'cache/{tag}_srtsne_lam1.0.npy')
     nn=NearestNeighbors(n_neighbors=30).fit(Y)
     eps=np.percentile(nn.kneighbors(Y)[0][:,-1],25)
     lab=DBSCAN(eps=eps,min_samples=30).fit_predict(Y)

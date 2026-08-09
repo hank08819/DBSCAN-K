@@ -1,5 +1,5 @@
-"""① 风险指标 Sharpe/maxDD/vol (35只, ours/orig/B&H @0.5bp)  ② filter消融 (ER-tSNE上拆dlp/filter)。
-净值序列现算; 年化按 5min bar (78 bar/日 x 252 日 = 19656 期/年)。"""
+"""(1) risk metrics Sharpe/maxDD/vol for ours, original and B&H at 0.5bp; (2) filter ablation on SR-tSNE.
+Equity curves are recomputed; annualization uses 78 five-minute bars x 252 sessions."""
 import sys
 sys.path.insert(0, 'src')
 import numpy as np, pandas as pd
@@ -17,7 +17,7 @@ def load(t):
     dd = pd.read_csv(f'{DATA_EXT}/{t}_n.csv'); yy = np.where(dd.marketClose >= dd.marketOpen, 1, -1)
     cols = [c for c in dd.columns if c != 'Date']
     X = StandardScaler().fit_transform(dd[cols].values.astype(np.float64))
-    return X, yy, dd.marketClose.values.astype(float), np.load(f'{CACHE}/{t}_tsne.npy'), np.load(f'{CACHE}/{t}_ertsne_lam1.0.npy')
+    return X, yy, dd.marketClose.values.astype(float), np.load(f'{CACHE}/{t}_tsne.npy'), np.load(f'{CACHE}/{t}_srtsne_lam1.0.npy')
 
 
 def equity(up_mask, down_mask, prices, c):
@@ -58,15 +58,15 @@ for t in STOCKS:
         abl[name].append(ret)
         if ret > bh_ret: ablw[name] += 1
 
-# ---- 打印 ----
+# ---- report ----
 print('=' * 60)
-print('① 风险调整指标 @0.5bp (35只均值, 年化)')
+print('(1) risk-adjusted metrics at 0.5bp (mean over 35, annualized)')
 print(f'{"method":8}{"Return%":>9}{"Sharpe":>9}{"Vol%":>9}{"MaxDD%":>9}')
 for m in ['ours', 'orig', 'B&H']:
     a = np.array(risk_rows[m]); mu = a.mean(0)
     print(f'{m:8}{mu[0]:>9.1f}{mu[1]:>9.2f}{mu[2]:>9.1f}{mu[3]:>9.1f}')
 print()
-print('② Filter 消融 @0.5bp (35只, 全在 ER-tSNE, 只改 dlp权重/filter档)')
+print('(2) filter ablation at 0.5bp (35 tickers, SR-tSNE throughout, varying dlp weight / filter level)')
 print(f'{"config":12}{"dlp":>5}{"filter":>8}{"Ret%":>8}{"winB&H":>8}')
 desc = {'full': ('1.0', 'P*=50'), 'no_dlp': ('0', 'P*=50'), 'no_filter': ('1.0', 'none(100)'), 'no_both': ('0', 'none(100)')}
 for name in ['full', 'no_dlp', 'no_filter', 'no_both']:
