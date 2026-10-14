@@ -1,6 +1,6 @@
 # DBSCAN+K: Cost-Aware Marker Detection for Intraday Trading
 
-Anonymous code and data release for an ICAIF 2026 submission.
+code and data release for an ICAIF 2026 submission.
 
 ![pipeline](assets/fig_pipeline.png)
 
